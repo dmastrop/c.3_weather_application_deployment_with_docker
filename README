@@ -207,7 +207,7 @@ cc86edf44521   auth:0.0.2      "/bin/sh -c /app"        3 hours ago      Up 3 ho
 8a678dc804f8   mysql           "docker-entrypoint.s…"   3 hours ago      Up 3 hours      0.0.0.0:3306->3306/tcp, :::3306->3306/tcp, 33060/tcp   laughing_goldstine
 
 
-### add the hook for the new UI docker container that hooks into the weather app
+### add the new UI docker container that hooks into the weather app
 
 docker run -p 3000:3000 -d -e AUTH_HOST=172.17.0.1 -e AUTH_PORT=8080 -e WEATHER_HOST=172.17.0.1 -e WEATHER_PORT=5000 ui:0.0.1
 
@@ -224,7 +224,7 @@ cc86edf44521   auth:0.0.2      "/bin/sh -c /app"        3 hours ago      Up 3 ho
 
 
 
-## Refresh the browser page
+## Refresh the browser page (ahmed/mypass)
 
 With the login we should be able to see the weather stats.  Note that this is runningl locally on the EC2 controller.  Next stage is to migrate this to the kops cluster
 
