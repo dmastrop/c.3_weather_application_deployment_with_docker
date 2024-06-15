@@ -9,11 +9,14 @@ services:
       DB_HOST: db
       DB_PASSWORD: my-secret-pw
     networks:
+    # we can no longer use the default docker bridge local network 172. app-net is a docker network that allows
+    # all the containers to talk to each other via flat bridge.
       - app-net
   ui:
     restart: always
     build: ./UI
     depends_on:
+    # UI is dependent on both the auth and weather containers being up and running
       - auth
       - weather
     environment:
@@ -22,6 +25,7 @@ services:
       WEATHER_HOST: weather
       WEATHER_PORT: 5000
     ports:
+    # these ports need to be exposed to client outside world
       - "3000:3000"
     networks:
       - app-net
@@ -29,7 +33,8 @@ services:
     restart: always
     build: ./weather
     environment:
-      APIKEY: ecbc396f46mshb65cbb1f82cf334p1fcc87jsna5e962a3c542
+      #APIKEY: ecbc396f46mshb65cbb1f82cf334p1fcc87jsna5e962a3c542
+      APIKEY: 6eafbb0c45msh451df8302c291f2p1e0a35jsnf98732edea29
     networks:
       - app-net
   db:

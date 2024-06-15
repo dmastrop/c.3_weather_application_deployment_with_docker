@@ -238,6 +238,32 @@ With the login we should be able to see the weather stats.  Note that this is ru
 
 
 
+
+
+
+
+
+
+# docker-compose.yaml to orchestrate the docker stack deployment 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Full stack weather app docker deployment onto kops cluster
 
 
