@@ -3,6 +3,7 @@ services:
   auth:
     restart: always
     build: ./auth
+    # build all microservices from scratch. The mysql below is from dockerhub
     depends_on:
       - db
     environment:
