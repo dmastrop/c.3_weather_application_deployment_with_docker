@@ -214,6 +214,8 @@ docker run -p 3000:3000 -d -e AUTH_HOST=172.17.0.1 -e AUTH_PORT=8080 -e WEATHER_
 
 ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weather$ docker run -p 3000:3000 -d -e AUTH_HOST=172.17.0.1 -e AUTH_PORT=8080 -e WEATHER_HOST=172.17.0.1 -e WEATHER_PORT=5000 ui:0.0.1
 a45b1c1b62a30b36180a9e0ad0d2d98b0bce7d9e8478eb54f64801e446406cc0
+
+
 ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weather$ docker ps
 CONTAINER ID   IMAGE           COMMAND                  CREATED          STATUS          PORTS                                                  NAMES
 a45b1c1b62a3   ui:0.0.1        "node app.js"            3 seconds ago    Up 2 seconds    0.0.0.0:3000->3000/tcp, :::3000->3000/tcp              objective_lehmann
