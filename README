@@ -235,6 +235,9 @@ With the login we should be able to see the weather stats.  Note that this is ru
 
 
 
+
+
+
 # Full stack weather app docker deployment onto kops cluster
 
 
