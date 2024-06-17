@@ -33,6 +33,8 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # add the environmental variables. For this that is the APIKEY
+          # value is from the secret.yaml and key is apikey as noted in that file.
           env:
           - name: APIKEY
             valueFrom:
@@ -41,6 +43,7 @@ spec:
                 name: {{ .Release.Name }}
           ports:
             - name: http
+            # change port to 5000
               containerPort: 5000
               protocol: TCP
           livenessProbe:

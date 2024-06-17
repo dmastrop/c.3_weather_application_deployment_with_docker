@@ -3,9 +3,12 @@
 # Declare variables to be passed into your templates.
 
 replicaCount: 2
+# requirement is for 2 pods per microservice
 
 image:
-  repository: afakharany/weatherapp-weather
+  #repository: afakharany/weatherapp-weather
+  repositiory: dave123456789/weatherapp-weather
+  # the tag 0.0.3 is from the Chart.yaml
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -38,6 +41,7 @@ securityContext: {}
 
 service:
   type: ClusterIP
+  # service port for the weatherapp microservice is 5000
   port: 5000
 
 ingress:
