@@ -258,7 +258,7 @@ curl -XPOST -d '{"user_name":"ahmed","user_password":"mypass"}' localhost:8080/u
 
 curl -XPOST -d '{"user_name":"ahmed","user_password":"mypass"}' localhost:8080/users/ahmed
 
-{"JWT":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRob3JpemVkIjp0cnVlLCJleHAiOjE3MTg0ODQ1NDYsInVzZXJuYW1lIjoiYWhtZWQifQ.0svDmVgfQXUxHXOuLzZCLA4ZOF3NsasguzLG66nxAeY"}
+{"JWT":"token******"}
 
 Start weather
 
@@ -540,6 +540,10 @@ fcd86ff8ce8c   6 weeks ago   CMD ["mysqld"]                                  0B 
 
 
 # STAGE3: Full stack weather app docker deployment onto kops cluster using HELM
+
+## Provisioning the weather app tiers using Helm to a kops Kubernetes cluster on AWS2
+
+
 
 
 
