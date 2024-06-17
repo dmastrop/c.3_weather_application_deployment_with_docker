@@ -1,19 +1,21 @@
-# Full stack weather app docker deployment onto local EC2 controller
+# Full stack weather app docker deployment onto local EC2 controller and then onto kops k8s cluster with HELM
 
 
+## PREREQUISITES:
 
-## NOTE: I am using an ubuntu 22 EC2 instance for all of this. The instance is running docker engine, kubectl, kops, kudo, kustomize, awscli2, helm and a jenkins_slave node (from another setup)
+
+### NOTE: I am using an ubuntu 22 EC2 instance for all of this. The instance is running docker engine, kubectl, kops, kudo, kustomize, awscli2, helm and a jenkins_slave node (from another setup)
 The instance name is in us-east-2: course3_kops_from_course8_project14_kops_snapshot t3.small
 Due to disk space issues with docker engine increased volume size from 8GB to 16GB
 
-## NOTE: there are 2 folders source_files and weaatherapp. Weatherapp is a direct clone and the source_files are from a zip of the repo. Both have latest source code for thie project.
+### NOTE: there are 2 folders source_files and weaatherapp. Weatherapp is a direct clone and the source_files are from a zip of the repo. Both have latest source code for thie project.
 
-## NOTE: For docker engine add ubuntu user to the docker group and execute all commands below as ubuntu user. Otherwise there will be docker build issues.
+### NOTE: For docker engine add ubuntu user to the docker group and execute all commands below as ubuntu user. Otherwise there will be docker build issues.
 
 sudo usermod -aG docker ubuntu
 
 
-## AWS configure list (for kops administration of the k8s cluster)
+### AWS configure list (for kops administration of the k8s cluster)
 
 ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weather$ aws configure list
       Name                    Value             Type    Location
@@ -29,6 +31,10 @@ secret_key     **************** shared-credentials-file
 
 
 
+
+
+
+# STAGE1: Deploying the microservices locally and manually with docker commands.
 
 ## auth microservice (golang)
 
@@ -244,7 +250,245 @@ With the login we should be able to see the weather stats.  Note that this is ru
 
 
 
-# docker-compose.yaml to orchestrate the docker stack deployment 
+# STAGE2: docker-compose.yaml to orchestrate the docker stack deployment of the same microservices
+
+
+## docker-compose.yaml
+
+version: "3.9"
+services:
+  auth:
+    restart: always
+    build: ./auth
+    # build all microservices from scratch. The mysql below is from dockerhub
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PASSWORD: my-secret-pw
+    networks:
+    # we can no longer use the default docker bridge local network 172. app-net is a docker network that allows
+    # all the containers to talk to each other via flat bridge.
+      - app-net
+  ui:
+    restart: always
+    build: ./UI
+    depends_on:
+    # UI is dependent on both the auth and weather containers being up and running
+      - auth
+      - weather
+    environment:
+      AUTH_HOST: auth
+      AUTH_PORT: 8080
+      WEATHER_HOST: weather
+      WEATHER_PORT: 5000
+    ports:
+    # these ports need to be exposed to client outside world
+      - "3000:3000"
+    networks:
+      - app-net
+  weather:
+    restart: always
+    build: ./weather
+    environment:
+      #APIKEY: ecbc396f46mshb65cbb1f82cf334p1fcc87jsna5e962a3c542
+      APIKEY: 6eafbb0c45msh451df8302c291f2p1e0a35jsnf98732edea29
+    networks:
+      - app-net
+  db:
+    restart: always
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: my-secret-pw
+    networks:
+      - app-net
+    volumes:
+      - ./db-data:/var/lib/mysql
+
+networks:
+  app-net:
+    driver: bridge
+volumes:
+  db-data:
+
+
+
+## issue with docker 7.0 (latest) and docker-compose v1.  Must use docker compose v2
+
+If you are running latest docker 7.0, it is no longer compatible with python based docker-compose (v1)
+you will see an error like this when trying to run this project:
+
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp$ docker-compose up -d
+Traceback (most recent call last):
+File "/usr/local/bin/docker-compose", line 8, in <module>
+sys.exit(main())
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/main.py", line 81, in main
+command_func()
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/main.py", line 200, in perform_command
+project = project_from_options('.', options)
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/command.py", line 60, in project_from_options
+return get_project(
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/command.py", line 152, in get_project
+client = get_client(
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/docker_client.py", line 41, in get_client
+client = docker_client(
+File "/usr/local/lib/python3.10/dist-packages/compose/cli/docker_client.py", line 124, in docker_client
+kwargs = kwargs_from_env(environment=environment, ssl_version=tls_version)
+TypeError: kwargs_from_env() got an unexpected keyword argument 'ssl_version'
+
+
+
+docker-compose version
+docker-compose version 1.29.2, build unknown
+docker-py version: <module 'docker.version' from '/usr/local/lib/python3.10/dist-packages/docker/version.py'>
+CPython version: 3.10.12
+OpenSSL version: OpenSSL 3.0.2 15 Mar 2022
+
+
+Reason for this is at this link
+https://stackoverflow.com/questions/77641240/getting-docker-compose-typeerror-kwargs-from-env-got-an-unexpected-keyword-ar
+Docker1 has made a change in v7.0.0 that breaks Docker Compose v1 written in Python (pip install docker-compose available as docker-compose). It has been deprecated and replaced by Docker Compose v2 implemented in Go which comes OOB as docker compose (sub-command).
+Permanent fix: Switch to Docker Compose v2 (no extra installation required, read the migration docs to fix compatibility issues). Docker Compose v2 switch is totally worth, btw; it is a near implementation.
+
+Temporary fix: Downgrade Docker1 using pip install docker==6.1.3 to the version that works with Docker Compose (v1).
+
+
+
+
+## Docker compose v2 installation
+
+to install docker compose v2 (note docker compose is v2 and docker-compose is v1; hyphenated)
+https://docs.docker.com/compose/migrate/
+
+for ubuntu
+
+set up docker apt repository
+
+
+
+Add Docker's official GPG key:
+
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+Add the repository to Apt sources:
+
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+
+Install the plugin
+
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
+
+
+docker compose version
+Docker Compose version v2.27.1
+
+
+
+## docker compose commands
+
+Run these commands in the root folder with docker-compose.yaml file in it
+
+docker compose up -d
+docker compose logs -g
+docker compose down
+
+
+
+
+ docker ps
+CONTAINER ID   IMAGE                COMMAND                  CREATED       STATUS       PORTS                                       NAMES
+03454c612b98   weatherapp-ui        "node app.js"            3 hours ago   Up 3 hours   0.0.0.0:3000->3000/tcp, :::3000->3000/tcp   weatherapp-ui-1
+d9b154dd48fe   weatherapp-auth      "/bin/sh -c /app"        3 hours ago   Up 3 hours   8080/tcp                                    weatherapp-auth-1
+b78bca7d354d   weatherapp-weather   "python3 /app/main.py"   3 hours ago   Up 3 hours   5000/tcp                                    weatherapp-weather-1
+9a24ea332a70   mysql                "docker-entrypoint.s…"   3 hours ago   Up 3 hours   3306/tcp, 33060/tcp                         weatherapp-db-1
+
+
+ docker compose down
+WARN[0000] /home/ubuntu/course3_projects/3_weather_app/source_files/weatherapp/docker-compose.yaml: `version` is obsolete 
+[+] Running 5/5
+ ✔ Container weatherapp-ui-1       Removed                                                                                    10.4s 
+ ✔ Container weatherapp-auth-1     Removed                                                                                     0.3s 
+ ✔ Container weatherapp-weather-1  Removed                                                                                    10.3s 
+ ✔ Container weatherapp-db-1       Removed                                                                                     1.8s 
+ ✔ Network weatherapp_app-net      Removed                                                                                     0.3s 
+
+
+## persistent storage for the mysql login credential data
+
+NOTE: the volume is stored in the local folder on the EC2 ubuntu controller instance in the db-data folder
+
+    volumes:
+      - ./db-data:/var/lib/mysql
+
+added this to the .gitignore (the entire db-data folder) so that the senstive data is not pushed to github repo.
+The entire folder is mapped to the mysql instance when it is instanatiated 
+I tested this with a user created yesterday after a complete shutdown of this ubuntu controller instance.
+Started the containers up again and the same user was there.
+
+The volume mount/binding on the mysql container can be seen with the command below
+The local db-data folder is mapped to the /var/lib/mysql on the  mysql db docker instance
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp$ docker ps
+CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+f3ca08bb8003   weatherapp-ui        "node app.js"            59 minutes ago   Up 59 minutes   0.0.0.0:3000->3000/tcp, :::3000->3000/tcp   weatherapp-ui-1
+a3344c796303   weatherapp-auth      "/bin/sh -c /app"        59 minutes ago   Up 59 minutes   8080/tcp                                    weatherapp-auth-1
+d779276e9f01   mysql                "docker-entrypoint.s…"   59 minutes ago   Up 59 minutes   3306/tcp, 33060/tcp                         weatherapp-db-1
+71c13584b35d   weatherapp-weather   "python3 /app/main.py"   59 minutes ago   Up 59 minutes   5000/tcp                                    weatherapp-weather-1
+
+
+ docker inspect -f '{{ .Mounts }}' d779276e9f01
+
+[{bind  /home/ubuntu/course3_projects/3_weather_app/source_files/weatherapp/db-data /var/lib/mysql  rw true rprivate}]
+
+
+
+## docker image ls
+
+docker image ls
+REPOSITORY           TAG       IMAGE ID       CREATED        SIZE
+weatherapp-ui        latest    bf1c2c40db22   26 hours ago   1e+03MB
+weatherapp-weather   latest    dc23087b0d4a   2 days ago     132MB
+weather              0.0.1     0f19773fcfb8   2 days ago     132MB
+<none>               <none>    62cff668aa0d   2 days ago     132MB
+ui                   0.0.1     bec6e49c6e5c   2 days ago     1e+03MB
+weatherapp-auth      latest    1bcb4f0ff7ae   3 days ago     18.9MB
+auth                 0.0.1     2dfc90fcbb13   3 days ago     18.9MB
+auth                 0.0.2     2dfc90fcbb13   3 days ago     18.9MB
+mysql                latest    fcd86ff8ce8c   6 weeks ago    578MB
+
+
+
+docker history fcd86ff8ce8c
+IMAGE          CREATED       CREATED BY                                      SIZE      COMMENT
+fcd86ff8ce8c   6 weeks ago   CMD ["mysqld"]                                  0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   EXPOSE map[3306/tcp:{} 33060/tcp:{}]            0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   ENTRYPOINT ["docker-entrypoint.sh"]             0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   COPY docker-entrypoint.sh /usr/local/bin/ # …   13.5kB    buildkit.dockerfile.v0
+<missing>      6 weeks ago   VOLUME [/var/lib/mysql]                         0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  microdnf install -…   307MB     buildkit.dockerfile.v0
+<missing>      6 weeks ago   ENV MYSQL_SHELL_VERSION=8.4.0-1.el9             0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eu;  {   echo '[mysql-to…   219B      buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  microdnf install -…   140MB     buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eu;  {   echo '[mysql8.4…   225B      buildkit.dockerfile.v0
+<missing>      6 weeks ago   ENV MYSQL_VERSION=8.4.0-1.el9                   0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   ENV MYSQL_MAJOR=8.4                             0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  key='BCA4 3417 C3B…   3.17kB    buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  microdnf install -…   16.5MB    buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  arch="$(uname -m)"…   2.36MB    buildkit.dockerfile.v0
+<missing>      6 weeks ago   ENV GOSU_VERSION=1.17                           0B        buildkit.dockerfile.v0
+<missing>      6 weeks ago   RUN /bin/sh -c set -eux;  groupadd --system …   2.77kB    buildkit.dockerfile.v0
+<missing>      6 weeks ago   /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B        
+<missing>      6 weeks ago   /bin/sh -c #(nop) ADD file:aa0e8a24fb10efad1…   112MB
 
 
 
@@ -263,8 +507,7 @@ With the login we should be able to see the weather stats.  Note that this is ru
 
 
 
-
-# Full stack weather app docker deployment onto kops cluster
+# STAGE3: Full stack weather app docker deployment onto kops cluster using HELM
 
 
 
