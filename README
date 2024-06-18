@@ -541,7 +541,196 @@ fcd86ff8ce8c   6 weeks ago   CMD ["mysqld"]                                  0B 
 
 # STAGE3: Full stack weather app docker deployment onto kops cluster using HELM
 
-## Provisioning the weather app tiers using Helm to a kops Kubernetes cluster on AWS2
+
+## Create docker hub images for the deployment to the kops k8s cluster
+
+docker build -t dave123456789/weatherapp-auth:0.0.3 ./auth
+docker build -t dave123456789/weatherapp-ui:0.0.3 ./UI
+docker build -t dave123456789/weatherapp-weather:0.0.3 /weather
+
+All from source code.   auth is in golang, UI is in node.js javascript and weather is in python. See STAGE1 and 2 above.
+
+
+
+## Push the images to dave123456789 docker account
+
+
+docker push dave123456789/weatherapp-auth:0.0.3
+docker push dave123456789/weatherapp-ui:0.0.3
+docker push dave123456789/weatherapp-weather:0.0.3
+
+
+
+
+
+
+## Weatherapp-auth helm chart
+
+helm create weatherapp-auth
+
+modify the Chart.yaml, the values.yaml and the templates/deployment.yaml
+
+### mysql must be available to the auth microserver. Create a dependency chart in weatherapp-auth folder
+
+Need to upgrade to latest code in Chart.yaml,  as the older code is not available at bitnami
+
+dependencies:
+  - name: mysql
+    #version: 8.8.14
+    version: 11.1.3
+    # latest at the time of recording but may need to update this. Latest is now 11.1.3
+    # re-run the "helm dependency build" and remove the Charts.lock file and move charts folder to backup. A new
+    # charts folder will be created.
+    repository: https://charts.bitnami.com/bitnami
+
+Run: helm dependency build in the weatherapp-auth folder
+This creates a chart subdiretory that has the mysql child dependency chart tar file.
+
+
+### Push the code to github and pull to the helm EC2 controller and deploy the chart to the kops cluster
+
+helm upgrade --install weatherapp-auth --set mysql.auth.rootPassword=******** .
+
+
+
+
+
+## Weatherapp-weather helm chart
+
+helm create weatherapp-weather
+
+modify the Chart.yaml, the values.yaml and the templates/deployment.yaml
+
+
+### For weatherapp-weather need an APIKEY to hook into the backend weather API service
+
+service.yaml file:
+
+apiVersion: v1
+kind: Secret
+metadata:
+    name: {{ .Release.Name }}
+type: Opaque
+data:
+    apikey: {{ .Values.apikey | b64enc | quote }}
+    # the value will be from the command line with the --set flag. Putting it in values.yaml is insecure.
+
+
+
+### in deployment.yaml add the following env
+
+env:
+          - name: APIKEY
+            valueFrom:
+              secretKeyRef:
+                key: apikey
+                name: {{ .Release.Name }}
+
+### Push the code to github and pull to the helm EC2 controller and deploy the chart to the kops cluster
+
+helm upgrade --install weatherapp-weather --set apikey=******************************* .
+
+
+
+
+
+
+
+## Weatherapp-ui helm chart:
+
+helm create weatherapp-ui
+
+modify the Chart.yaml, the values.yaml and the templates/deployment.yaml
+
+
+### in deployment.yaml add the following env vars
+
+
+env:
+          - name: AUTH_HOST
+            value: weatherapp-auth
+          - name: AUTH_PORT
+            value: "8080"
+          - name: WEATHER_HOST
+            value: weatherapp-weather
+          - name: WEATHER_PORT
+            value: "5000"
+
+
+### Push the code to github and pull to the helm EC2 controller and deploy the chart to the kops cluster
+
+helm upgrade --install weatherapp-ui .
+
+
+
+
+
+## Verify the deployment of the pods to the running kops cluster
+
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get pods
+NAME                                  READY   STATUS    RESTARTS      AGE
+weatherapp-auth-76c8df5d6b-m466k      1/1     Running   2 (85m ago)   86m
+weatherapp-auth-76c8df5d6b-xmpbv      1/1     Running   2 (85m ago)   86m
+weatherapp-auth-mysql-0               1/1     Running   0             86m
+weatherapp-ui-5bd8dcc685-456c9        1/1     Running   0             102s
+weatherapp-ui-5bd8dcc685-s44k6        1/1     Running   0             102s
+weatherapp-weather-77b797b646-g7q4b   1/1     Running   0             25m
+weatherapp-weather-77b797b646-j86km   1/1     Running   0             25m
+
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get service
+NAME                             TYPE           CLUSTER-IP       EXTERNAL-IP                                                               PORT(S)        AGE
+kubernetes                       ClusterIP      100.64.0.1       <none>                                                                    443/TCP        99m
+weatherapp-auth                  ClusterIP      100.68.161.113   <none>                                                                    8080/TCP       89m
+weatherapp-auth-mysql            ClusterIP      100.65.199.226   <none>                                                                    3306/TCP       89m
+weatherapp-auth-mysql-headless   ClusterIP      None             <none>                                                                    3306/TCP       89m
+weatherapp-ui                    LoadBalancer   100.64.88.160    ae00b7bba32494df88c371a785487f27-1726828820.us-east-1.elb.amazonaws.com   80:30088/TCP   4m44s
+weatherapp-weather               ClusterIP      100.64.122.48    <none>                                                                    5000/TCP       45m
+
+
+
+### the loadbalancer can be tested by going to the loadbalancer URL above
+
+
+
+
+
+## take down the setup with helm uninstall
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ helm history weatherapp-auth
+REVISION        UPDATED                         STATUS          CHART                   APP VERSION     DESCRIPTION     
+1               Mon Jun 17 22:43:23 2024        deployed        weatherapp-auth-0.1.0   0.0.3           Install complete
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ helm history weatherapp-ui
+REVISION        UPDATED                         STATUS          CHART                   APP VERSION     DESCRIPTION     
+1               Tue Jun 18 00:08:14 2024        deployed        weatherapp-ui-0.1.0     0.0.3           Install complete
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ helm history weatherapp-weather
+REVISION        UPDATED                         STATUS          CHART                           APP VERSION     DESCRIPTION     
+1               Mon Jun 17 23:27:24 2024        superseded      weatherapp-weather-0.1.0        0.0.3           Install complete
+2               Mon Jun 17 23:43:58 2024        deployed        weatherapp-weather-0.1.0        0.0.3           Upgrade complete
+
+
+
+helm uninstall weatherapp-auth
+
+helm uninstall weatherapp-ui
+
+helm uninstall weatherapp-weather
+
+### manually delete the PVC (this removes the mysql PVC and PV)
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                                  STORAGECLASS    REASON   AGE
+pvc-7dfef7b4-b2bd-404f-8995-59668d9351e6   8Gi        RWO            Delete           Bound    default/data-weatherapp-auth-mysql-0   kops-csi-1-21            104m
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get pvc
+NAME                           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+data-weatherapp-auth-mysql-0   Bound    pvc-7dfef7b4-b2bd-404f-8995-59668d9351e6   8Gi        RWO            kops-csi-1-21   104m
+
+
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get pv
+No resources found
+ubuntu@ip-172-31-21-52:~/course3_projects/3_weather_app/source_files/weatherapp/weatherapp-ui$ kubectl get pvc
+No resources found in default namespace.
 
 
 
