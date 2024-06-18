@@ -2,10 +2,12 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# all microservices need 2 pods each
 replicaCount: 2
 
 image:
-  repository: afakharany/weatherapp-ui
+  #repository: afakharany/weatherapp-ui
+  repository: dave123456789/weatherapp-ui
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -37,6 +39,7 @@ securityContext: {}
   # runAsUser: 1000
 
 service:
+  # make sure type is Loadbalancer becasue need external access from the browser
   type: LoadBalancer
   port: 80
 

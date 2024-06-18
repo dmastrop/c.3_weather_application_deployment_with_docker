@@ -33,6 +33,8 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # need 4 env variables for the UI microservice
+          # note that the names can be used to reference them as Host addresses.
           env:
           - name: AUTH_HOST
             value: weatherapp-auth
@@ -44,6 +46,7 @@ spec:
             value: "5000"
           ports:
             - name: http
+            # the UI container listens on 3000 and not 80. Browser must be directed to :3000 http and not port 80
               containerPort: 3000
               protocol: TCP
           livenessProbe:
