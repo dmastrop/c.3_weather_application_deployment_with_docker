@@ -1,4 +1,4 @@
-# Full stack weather app docker deployment onto local EC2 controller and then onto kops k8s cluster with HELM
+# c.3. Full stack weather app docker deployment onto local EC2 controller and then onto kops k8s cluster with HELM
 
 
 ## PREREQUISITES:
